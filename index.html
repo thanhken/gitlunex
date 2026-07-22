@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitLunex — A local Git client, in a new light</title>
+    <meta
+      name="description"
+      content="GitLunex is a fast, lightweight local Git GUI for Ubuntu, macOS and Windows. One window, browser-style tabs, a real embedded terminal — built on Tauri + Rust."
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Full-document ambient field: soft glows at varying depths so the
+         backdrop shifts blue↔violet section to section (kills the "repeated
+         background" feel). Static — painted once, no scroll cost. -->
+    <div class="bg-field" aria-hidden="true"></div>
+
+    <!-- Preloader: crescent + orbiting rings, echoing the app icon -->
+    <div class="preloader" id="preloader" aria-hidden="true">
+      <div class="preloader__mark">
+        <svg viewBox="0 0 120 120" width="92" height="92">
+          <g class="orbit orbit--1">
+            <ellipse cx="60" cy="60" rx="54" ry="30" fill="none" stroke="currentColor" stroke-width="0.6" stroke-dasharray="1 5" />
+          </g>
+          <g class="orbit orbit--2">
+            <ellipse cx="60" cy="60" rx="30" ry="54" fill="none" stroke="currentColor" stroke-width="0.6" stroke-dasharray="1 5" />
+          </g>
+          <path d="M78 52a20 20 0 1 1-22-25 15 15 0 0 0 22 25Z" fill="#dfe6ff" />
+          <circle cx="42" cy="70" r="4.6" fill="#9a6bff" />
+          <circle cx="42" cy="48" r="4.6" fill="#4f9dff" />
+          <path d="M42 48v22" stroke="#7b83ff" stroke-width="2.4" stroke-linecap="round" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Animated star / orbit canvas backdrop -->
+    <canvas class="sky" id="sky" aria-hidden="true"></canvas>
+    <div class="aurora" aria-hidden="true"></div>
+
+    <!-- ================= NAV ================= -->
+    <header class="nav" id="nav">
+      <a class="nav__brand" href="#top" aria-label="GitLunex home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26">
+            <path d="M21.5 14.2A8.6 8.6 0 1 1 11.8 3.5 6.9 6.9 0 0 0 21.5 14.2Z" fill="#4f9dff" />
+            <path d="M5.2 8v7.5" stroke="#7b83ff" stroke-width="1.7" stroke-linecap="round" />
+            <circle cx="5.2" cy="8" r="2" fill="#9a6bff" />
+            <circle cx="5.2" cy="15.5" r="2" fill="#7b83ff" />
+          </svg>
+        </span>
+        <span class="brand-name">GitLunex</span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#workflow" data-i18n="nav.workflow">Workflow</a>
+        <a href="#toolbox" data-i18n="nav.toolbox">Toolbox</a>
+        <a href="#download" data-i18n="nav.download">Download</a>
+      </nav>
+
+      <div class="nav__actions">
+        <div class="lang" role="group" aria-label="Language">
+          <button class="lang__btn is-active" data-lang="en" aria-label="English">
+            <span class="flag" aria-hidden="true">
+              <svg viewBox="0 0 30 20" width="20" height="14">
+                <clipPath id="uk-clip"><rect width="30" height="20" rx="3" /></clipPath>
+                <g clip-path="url(#uk-clip)">
+                  <rect width="30" height="20" fill="#012169" />
+                  <path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4" />
+                  <path d="M0 0 30 20M30 0 0 20" stroke="#c8102e" stroke-width="1.6" />
+                  <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6" />
+                  <path d="M15 0V20M0 10H30" stroke="#c8102e" stroke-width="3.4" />
+                </g>
+              </svg>
+            </span>
+            <span>EN</span>
+          </button>
+          <button class="lang__btn" data-lang="vi" aria-label="Tiếng Việt">
+            <span class="flag" aria-hidden="true">
+              <svg viewBox="0 0 30 20" width="20" height="14">
+                <clipPath id="vn-clip"><rect width="30" height="20" rx="3" /></clipPath>
+                <g clip-path="url(#vn-clip)">
+                  <rect width="30" height="20" fill="#da251d" />
+                  <polygon fill="#ff0" points="15,4.5 16.23,8.3 20.23,8.3 17,10.65 18.23,14.45 15,12.1 11.77,14.45 13,10.65 9.77,8.3 13.77,8.3" />
+                </g>
+              </svg>
+            </span>
+            <span>VI</span>
+          </button>
+        </div>
+        <a class="btn btn--ghost nav__gh" href="https://github.com/thanhken/gitlunex" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
+        <a class="btn btn--primary nav__cta" href="#download" data-i18n="nav.get">Get GitLunex</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- ================= HERO ================= -->
+      <section class="hero">
+        <div class="hero__rings" aria-hidden="true">
+          <span class="ring ring--a"></span>
+          <span class="ring ring--b"></span>
+          <span class="ring ring--c"></span>
+        </div>
+
+        <div class="hero__inner">
+          <p class="eyebrow reveal" data-i18n="hero.eyebrow">
+            <span class="eyebrow__dot"></span> Local-first Git client · Ubuntu · macOS · Windows
+          </p>
+
+          <h1 class="hero__title reveal">
+            <span data-i18n="hero.title1">Your repositories,</span><br />
+            <span class="grad" data-i18n="hero.title2">in a new light.</span>
+          </h1>
+
+          <p class="hero__sub reveal" data-i18n="hero.sub">
+            A fast, lightweight Git GUI that shells out to the same <code>git</code> you
+            already trust. One window, browser-style tabs, a branch-aware history graph
+            and a real embedded terminal — built on Tauri&nbsp;+&nbsp;Rust.
+          </p>
+
+          <div class="hero__cta reveal">
+            <a class="btn btn--primary btn--lg" href="#download">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>
+              <span data-i18n="hero.download">Download for Linux</span>
+            </a>
+            <a class="btn btn--ghost btn--lg" href="https://github.com/thanhken/gitlunex" target="_blank" rel="noopener" data-i18n="hero.github">View on GitHub</a>
+          </div>
+
+          <p class="hero__meta reveal" data-i18n="hero.meta">
+            Free download · ~10&nbsp;MB binary · uses your system git, hooks &amp; credentials
+          </p>
+        </div>
+
+        <div class="hero__shot reveal" data-tilt>
+          <div class="shot-glow" aria-hidden="true"></div>
+          <img
+            src="assets/shot-terminal.png"
+            width="2880" height="1800"
+            alt="GitLunex history graph with the embedded terminal open"
+            loading="eager"
+          />
+        </div>
+      </section>
+
+      <!-- ================= MARQUEE ================= -->
+      <section class="strip" aria-label="Built with">
+        <div class="strip__track">
+          <!-- duplicated for a seamless marquee (main.js clones) -->
+          <ul class="strip__list" id="stripList">
+            <li>Tauri v2</li><li aria-hidden="true">✦</li>
+            <li>Rust</li><li aria-hidden="true">✦</li>
+            <li>React 18</li><li aria-hidden="true">✦</li>
+            <li>TypeScript</li><li aria-hidden="true">✦</li>
+            <li>Tailwind v4</li><li aria-hidden="true">✦</li>
+            <li>xterm.js</li><li aria-hidden="true">✦</li>
+            <li>System&nbsp;git</li><li aria-hidden="true">✦</li>
+            <li>Zustand</li><li aria-hidden="true">✦</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ================= STATS ================= -->
+      <section class="stats">
+        <div class="stat reveal">
+          <div class="stat__num">3</div>
+          <div class="stat__label" data-i18n="stat.platforms">platforms — Ubuntu, macOS &amp; Windows</div>
+        </div>
+        <div class="stat reveal">
+          <div class="stat__num">~10<span>MB</span></div>
+          <div class="stat__label" data-i18n="stat.size">tiny Tauri binary, low memory</div>
+        </div>
+        <div class="stat reveal">
+          <div class="stat__num">0<span>daemons</span></div>
+          <div class="stat__label" data-i18n="stat.daemons">no background services or indexers</div>
+        </div>
+        <div class="stat reveal">
+          <div class="stat__num">100<span>%</span></div>
+          <div class="stat__label" data-i18n="stat.git">your git config, hooks &amp; credentials</div>
+        </div>
+      </section>
+
+      <!-- ================= FEATURES (alternating) ================= -->
+      <section class="section" id="features">
+        <div class="section__head reveal">
+          <p class="kicker" data-i18n="feat.kicker">Everything, in one window</p>
+          <h2 class="section__title" data-i18n="feat.title">Built for the way you actually use Git.</h2>
+        </div>
+
+        <!-- Feature 1 -->
+        <article class="feature reveal">
+          <div class="feature__text">
+            <span class="feature__no">01</span>
+            <h3 data-i18n="feat1.h">A branch-aware history graph</h3>
+            <p data-i18n="feat1.p">
+              See every branch, tag, remote and stash across all refs in one clean graph.
+              Colored lanes, ref pills and ahead/behind badges make the shape of your
+              history obvious at a glance.
+            </p>
+            <ul class="ticks">
+              <li data-i18n="feat1.b1">Graph across all refs, up to 500 commits</li>
+              <li data-i18n="feat1.b2">Per-commit changed files &amp; diffs</li>
+              <li data-i18n="feat1.b3">Multi-select a range to compare</li>
+            </ul>
+          </div>
+          <figure class="feature__media">
+            <div class="frame"><img src="assets/shot-history.png" width="2880" height="1800" alt="GitLunex commit history graph" loading="lazy" /></div>
+          </figure>
+        </article>
+
+        <!-- Feature 2 -->
+        <article class="feature feature--flip reveal">
+          <div class="feature__text">
+            <span class="feature__no">02</span>
+            <h3 data-i18n="feat2.h">Stage, diff &amp; commit with flow</h3>
+            <p data-i18n="feat2.p">
+              Staged, unstaged and untracked files sit side by side with a live diff
+              preview. Stage a file, review the hunks, write a message and commit —
+              <code>Ctrl/Cmd+Enter</code> and you're done.
+            </p>
+            <ul class="ticks">
+              <li data-i18n="feat2.b1">Stage / unstage / discard per file</li>
+              <li data-i18n="feat2.b2">Live syntax-highlighted diffs</li>
+              <li data-i18n="feat2.b3">Amend the last commit in a click</li>
+            </ul>
+          </div>
+          <figure class="feature__media">
+            <div class="frame"><img src="assets/shot-working-copy.png" width="2880" height="1800" alt="GitLunex working copy with staged and unstaged changes" loading="lazy" /></div>
+          </figure>
+        </article>
+
+        <!-- Feature 3 -->
+        <article class="feature reveal">
+          <div class="feature__text">
+            <span class="feature__no">03</span>
+            <h3 data-i18n="feat3.h">Read every change like a story</h3>
+            <p data-i18n="feat3.p">
+              Click any commit to see its files and a crisp unified diff — additions and
+              deletions clearly marked, line numbers aligned. History stops being a wall
+              of hashes and starts telling you what happened.
+            </p>
+            <ul class="ticks">
+              <li data-i18n="feat3.b1">Per-file diffs for any commit</li>
+              <li data-i18n="feat3.b2">Export or apply a range as a patch</li>
+              <li data-i18n="feat3.b3">Reset, tag or rebase from the graph</li>
+            </ul>
+          </div>
+          <figure class="feature__media">
+            <div class="frame"><img src="assets/shot-commit-diff.png" width="2880" height="1800" alt="GitLunex commit diff view" loading="lazy" /></div>
+          </figure>
+        </article>
+
+        <!-- Feature 4 -->
+        <article class="feature feature--flip reveal">
+          <div class="feature__text">
+            <span class="feature__no">04</span>
+            <h3 data-i18n="feat4.h">A real terminal, built right in</h3>
+            <p data-i18n="feat4.p">
+              Toggle a full PTY shell rooted at the repo — powered by xterm.js — without
+              ever leaving the window. Drop to the command line for anything the GUI
+              doesn't cover, then jump straight back to the graph.
+            </p>
+            <ul class="ticks">
+              <li data-i18n="feat4.b1">One interactive shell per repo tab</li>
+              <li data-i18n="feat4.b2">Pop out to your system terminal or file manager</li>
+              <li data-i18n="feat4.b3">Cross-platform, real PTY</li>
+            </ul>
+          </div>
+          <figure class="feature__media">
+            <div class="frame"><img src="assets/shot-terminal.png" width="2880" height="1800" alt="GitLunex embedded terminal" loading="lazy" /></div>
+          </figure>
+        </article>
+      </section>
+
+      <!-- ================= WORKFLOW / ORGANIZER ================= -->
+      <section class="section workspace band" id="workflow">
+        <div class="section__head reveal">
+          <p class="kicker" data-i18n="ws.kicker">One window, every repo</p>
+          <h2 class="section__title" data-i18n="ws.title">A tabbed workspace that keeps up with you.</h2>
+          <p class="section__lead" data-i18n="ws.lead">
+            A pinned Home launcher organises your repositories into nestable folders.
+            Open each one as a browser-style tab — drag to reorder, middle-click to close,
+            and every tab remembers its scroll, selection and terminal.
+          </p>
+        </div>
+        <figure class="workspace__media reveal" data-tilt>
+          <div class="shot-glow shot-glow--soft" aria-hidden="true"></div>
+          <div class="frame frame--wide"><img src="assets/shot-launcher.png" width="2880" height="1800" alt="GitLunex repository organizer with folders" loading="lazy" /></div>
+        </figure>
+        <div class="workspace__keys">
+          <div class="key reveal"><kbd>Ctrl/⌘</kbd><kbd>T</kbd><span data-i18n="ws.k1">Open a tab</span></div>
+          <div class="key reveal"><kbd>Ctrl/⌘</kbd><kbd>W</kbd><span data-i18n="ws.k2">Close active tab</span></div>
+          <div class="key reveal"><kbd>Ctrl/⌘</kbd><kbd>Tab</kbd><span data-i18n="ws.k3">Cycle tabs</span></div>
+          <div class="key reveal"><kbd>Ctrl/⌘</kbd><kbd>1–9</kbd><span data-i18n="ws.k4">Jump to tab</span></div>
+        </div>
+      </section>
+
+      <!-- ================= FEATURE GRID ================= -->
+      <section class="section grid-section" id="toolbox">
+        <div class="section__head reveal">
+          <p class="kicker" data-i18n="grid.kicker">The full toolbox</p>
+          <h2 class="section__title" data-i18n="grid.title">Sourcetree-class features, minus the weight.</h2>
+        </div>
+        <div class="grid">
+          <div class="card reveal"><span class="card__no">01</span><h4 data-i18n="g1.h">Working copy</h4><p data-i18n="g1.p">Staged, unstaged &amp; untracked lists with instant diffs.</p></div>
+          <div class="card reveal"><span class="card__no">02</span><h4 data-i18n="g2.h">Commit</h4><p data-i18n="g2.p">Write, amend and commit staged changes in a keystroke.</p></div>
+          <div class="card reveal"><span class="card__no">03</span><h4 data-i18n="g3.h">History graph</h4><p data-i18n="g3.p">Branch-aware graph across every ref in the repo.</p></div>
+          <div class="card reveal"><span class="card__no">04</span><h4 data-i18n="g4.h">Branches, remotes &amp; tags</h4><p data-i18n="g4.p">Create, checkout and delete from the sidebar.</p></div>
+          <div class="card reveal"><span class="card__no">05</span><h4 data-i18n="g5.h">Remote sync</h4><p data-i18n="g5.p">Fetch, pull &amp; push with live ahead/behind badges.</p></div>
+          <div class="card reveal"><span class="card__no">06</span><h4 data-i18n="g6.h">Interactive rebase</h4><p data-i18n="g6.p">Reorder, squash &amp; reword with an in-app conflict editor.</p></div>
+          <div class="card reveal"><span class="card__no">07</span><h4 data-i18n="g7.h">Stash</h4><p data-i18n="g7.p">Push, pop, apply or branch your work-in-progress.</p></div>
+          <div class="card reveal"><span class="card__no">08</span><h4 data-i18n="g8.h">Embedded terminal</h4><p data-i18n="g8.p">A real PTY shell per tab, plus system-tool shortcuts.</p></div>
+          <div class="card reveal"><span class="card__no">09</span><h4 data-i18n="g9.h">Repository organizer</h4><p data-i18n="g9.p">Nestable folders and drag-to-organise on Home.</p></div>
+        </div>
+      </section>
+
+      <!-- ================= WHY TAURI ================= -->
+      <section class="section why band">
+        <div class="why__inner reveal">
+          <p class="kicker" data-i18n="why.kicker">Why it feels fast</p>
+          <h2 class="section__title" data-i18n="why.title">Native speed, because it isn't a browser in disguise.</h2>
+          <p class="section__lead" data-i18n="why.lead">
+            The shell is Tauri v2 — a small Rust binary instead of a bundled Chromium.
+            Git operations shell out to your system <code>git</code> and are parsed in Rust,
+            so every repo works exactly as it does on the command line — hooks, config,
+            credential helpers and all.
+          </p>
+          <div class="why__points">
+            <div class="pt reveal"><h4 data-i18n="why1.h">Small &amp; light</h4><p data-i18n="why1.p">A ~10&nbsp;MB install with a low memory footprint.</p></div>
+            <div class="pt reveal"><h4 data-i18n="why2.h">Your git, unchanged</h4><p data-i18n="why2.p">No reimplementation — it drives the real CLI.</p></div>
+            <div class="pt reveal"><h4 data-i18n="why3.h">Cross-platform</h4><p data-i18n="why3.p">One codebase for Linux, macOS &amp; Windows.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= DOWNLOAD ================= -->
+      <section class="section download" id="download">
+        <div class="section__head reveal">
+          <p class="kicker" data-i18n="dl.kicker">Get started</p>
+          <h2 class="section__title" data-i18n="dl.title">Download GitLunex.</h2>
+          <p class="section__lead" data-i18n="dl.lead">
+            Grab the installer for your platform from GitHub Releases. Make sure
+            <code>git</code> is installed — GitLunex drives your system git.
+          </p>
+        </div>
+        <div class="dl-grid">
+          <a class="dl-card reveal" href="https://github.com/thanhken/gitlunex/releases/latest" target="_blank" rel="noopener">
+            <div class="dl-card__os">
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true"><path d="M12.5 2c-1.9 0-3 1.6-3 3.4 0 .6 0 1.1.2 1.7-.6.5-1.7 1.7-2.4 3.5-.6 1.6-1.2 2.6-1.8 3.6-.5.9-.4 2 .3 2.5.2.6.2 1.3.6 1.8.5.7 1.4.8 2.2.7.5.5 1.2.9 2.3.9 1.1 0 1.8-.4 2.3-.9.8.1 1.7 0 2.2-.7.4-.5.4-1.2.6-1.8.7-.5.8-1.6.3-2.5-.6-1-1.2-2-1.8-3.6-.7-1.8-1.8-3-2.4-3.5.2-.6.2-1.1.2-1.7C15.5 3.6 14.4 2 12.5 2Z"/></svg>
+            </div>
+            <div class="dl-card__body">
+              <h4>Linux</h4>
+              <p data-i18n="dl.linux">.deb &amp; .AppImage · Ubuntu 22.04+</p>
+            </div>
+            <span class="dl-card__go">↓</span>
+          </a>
+          <a class="dl-card reveal" href="https://github.com/thanhken/gitlunex/releases/latest" target="_blank" rel="noopener">
+            <div class="dl-card__os">
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true"><path d="M16.4 12.9c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.9-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.5-3.9ZM14.2 5.9c.6-.8 1-1.9.9-3-.9 0-2 .6-2.6 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.6-1.3Z"/></svg>
+            </div>
+            <div class="dl-card__body">
+              <h4>macOS</h4>
+              <p data-i18n="dl.macos">.dmg · Apple Silicon &amp; Intel</p>
+            </div>
+            <span class="dl-card__go">↓</span>
+          </a>
+          <a class="dl-card reveal" href="https://github.com/thanhken/gitlunex/releases/latest" target="_blank" rel="noopener">
+            <div class="dl-card__os">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M3 5.4 10.3 4v7.2H3V5.4Zm0 13.2 7.3 1V11.9H3v6.7ZM11.2 3.8 21 2.5v9H11.2V3.8Zm0 8.1H21v9l-9.8-1.3v-7.7Z"/></svg>
+            </div>
+            <div class="dl-card__body">
+              <h4>Windows</h4>
+              <p data-i18n="dl.win">.msi &amp; .exe · Windows 10+</p>
+            </div>
+            <span class="dl-card__go">↓</span>
+          </a>
+        </div>
+        <p class="dl-note reveal" data-i18n="dl.note">
+          macOS builds are ad-hoc signed — on first launch run
+          <code>xattr -rd com.apple.quarantine /Applications/GitLunex.app</code>. See the README for details.
+        </p>
+      </section>
+    </main>
+
+    <!-- ================= FOOTER ================= -->
+    <footer class="footer">
+      <div class="footer__brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <path d="M21.5 14.2A8.6 8.6 0 1 1 11.8 3.5 6.9 6.9 0 0 0 21.5 14.2Z" fill="#4f9dff" />
+            <path d="M5.2 8v7.5" stroke="#7b83ff" stroke-width="1.7" stroke-linecap="round" />
+            <circle cx="5.2" cy="8" r="2" fill="#9a6bff" />
+            <circle cx="5.2" cy="15.5" r="2" fill="#7b83ff" />
+          </svg>
+        </span>
+        <span class="brand-name">GitLunex</span>
+      </div>
+      <p class="footer__tag" data-i18n="footer.tag">A local Git client, in a new light. Built with Tauri&nbsp;+&nbsp;React.</p>
+      <nav class="footer__links" aria-label="Footer">
+        <a href="https://github.com/thanhken/gitlunex" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/thanhken/gitlunex/releases" target="_blank" rel="noopener" data-i18n="footer.releases">Releases</a>
+        <a href="#top" data-i18n="footer.top">Back to top</a>
+      </nav>
+    </footer>
+
+    <script src="main.js"></script>
+  </body>
+</html>
